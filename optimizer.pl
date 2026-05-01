@@ -90,21 +90,18 @@ best_schedule(Schedule, Score) :-
 print_report(Schedule) :-
     evaluate_schedule(Schedule, report(Energy, Imbalance, Variance, Composite)),
     nl,
-    write('=========================================='), nl,
     write('       OPTIMIZATION REPORT                '), nl,
-    write('=========================================='), nl,
     format('  Total Weekly Energy   : ~4f kWh~n', [Energy]),
     format('  Daily Imbalance       : ~4f kWh~n', [Imbalance]),
     format('  Room Usage Variance   : ~4f~n',     [Variance]),
-    write('  ------------------------------------------'), nl,
     format('  Composite Score       : ~4f~n',     [Composite]),
     weight(energy, W1), weight(imbalance, W2), weight(variance, W3),
     format('  Weights: Energy=~w, Imbalance=~w, Variance=~w~n', [W1, W2, W3]),
     nl,
-    write('  --- Per-Day Energy Breakdown ---'), nl,
+    write('  Per-Day Energy Breakdown '), nl,
     print_daily_energy(Schedule),
     nl,
-    write('  --- Per-Building Energy vs Threshold ---'), nl,
+    write('  Per-Building Energy vs Threshold '), nl,
     print_building_energy(Schedule).
 
 print_daily_energy(Schedule) :-
@@ -131,7 +128,7 @@ print_building_energy(Schedule) :-
     ).
 
 print_room_usage(Schedule) :-
-    nl, write('=== Room Usage Report ==='), nl,
+    nl, write(' Room Usage Report '), nl,
     findall(R, room(R, _, _, _, _), Rooms),
     forall(
         member(R, Rooms),
@@ -158,9 +155,9 @@ compare_two(S1, Name1, S2, Name2) :-
     ).
 
 test_optimizer :-
-    nl, write('============================================'), nl,
+    nl,
     write('  OPTIMIZER TEST SUITE'), nl,
-    write('============================================'), nl, nl,
+    nl,
     ground_truth_sessions(Schedule),
     length(Schedule, N),
     format('[INFO] Working with ~w sessions.~n~n', [N]),
@@ -180,13 +177,11 @@ test_optimizer :-
     print_report(Schedule),
     write('[TEST 6] Room usage report...'), nl,
     print_room_usage(Schedule),
-    nl, write('============================================'), nl,
     write('  ALL OPTIMIZER TESTS DONE'), nl,
-    write('============================================'), nl.
 
 optimize :-
     ground_truth_sessions(Schedule),
-    write('=== Running Optimizer ==='), nl,
+    write(' Running Optimizer '), nl,
     print_report(Schedule),
     nl,
     best_schedule(_, BestScore),

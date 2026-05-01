@@ -41,7 +41,7 @@ free_generate(Course, Group, Partial, Room, Slot) :-
     repair_session(Course, Group, Partial, Room, Slot).
 
 full_validate(Schedule) :-
-    write('=== Running full validation ==='), nl,
+    write(' Running full validation '), nl,
     ( validate_schedule(Schedule) ->
         write('[OK] All constraints satisfied.'), nl
     ;
@@ -110,9 +110,9 @@ print_building_day(Building, Day, Schedule) :-
     format('  Energy: ~w / ~w kWh~n', [Energy, Threshold]).
 
 test_scheduler :-
-    nl, write('============================================'), nl,
+    nl, 
     write('  SCHEDULER TEST SUITE'), nl,
-    write('============================================'), nl, nl,
+    nl,
     write('[TEST 1] Generating schedule from knowledge base...'), nl,
     ground_truth_sessions(Sessions),
     length(Sessions, N),
@@ -129,9 +129,8 @@ test_scheduler :-
     ;
         write('  No repair found (expected if all slots taken).'), nl
     ),
-    nl, write('============================================'), nl,
-    write('  ALL TESTS DONE'), nl,
-    write('============================================'), nl.
+    nl, 
+    write('  ALL TESTS DONE'), nl.
 
 test_energy_monday(Schedule) :-
     forall(
@@ -143,13 +142,13 @@ test_energy_monday(Schedule) :-
     ).
 
 run :-
-    write('=== Generating schedule... ==='), nl,
+    write(' Generating schedule... '), nl,
     ground_truth_sessions(Schedule),
-    nl, write('=== Validation ==='), nl,
+    nl, write(' Validation '), nl,
     full_validate(Schedule),
-    nl, write('=== Energy Summary (all days) ==='), nl,
+    nl, write(' Energy Summary (all days) '), nl,
     energy_summary(Schedule),
-    nl, write('=== Done. Use print_schedule(S) to display all sessions. ==='), nl.
+    nl, write(' Done. Use print_schedule(S) to display all sessions. '), nl.
 
 energy_summary(Schedule) :-
     all_days(Days),
