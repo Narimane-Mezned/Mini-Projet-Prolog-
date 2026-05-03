@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GL Scheduler — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0e0f11;
+  --bg2:       #16181c;
+  --bg3:       #1e2026;
+  --border:    #2a2d35;
+  --border2:   #3a3e48;
+  --text:      #e8eaf0;
+  --muted:     #7a7f8e;
+  --accent:    #5b8dee;
+  --accent2:   #3ecf8e;
+  --warn:      #f5a623;
+  --danger:    #e8534a;
+  --purple:    #8b6de8;
+  --font-disp: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --radius:    8px;
+  --radius-lg: 14px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.app { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; }
+
+header {
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  height: 56px;
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  font-family: var(--font-disp);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.logo span { color: var(--accent); }
+
+nav { display: flex; gap: 4px; }
+nav button {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all .15s;
+  letter-spacing: .02em;
+}
+nav button:hover  { color: var(--text); background: var(--bg3); }
+nav button.active { color: var(--text); background: var(--bg3); border: 1px solid var(--border2); }
+
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background .3s;
+}
+.status-dot.online  { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+.status-dot.error   { background: var(--danger); }
+.status-dot.loading { background: var(--warn); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.status-label { color: var(--muted); font-size: 11px; }
+
+.btn-refresh {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-refresh:hover { color: var(--text); border-color: var(--accent); }
+
+main { padding: 28px 32px; overflow-y: auto; }
+
+.panel { display: none; }
+.panel.active { display: block; animation: fadein .2s ease; }
+@keyframes fadein { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── Group pill filter ── */
+.group-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.pill {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 5px 16px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.pill:hover  { color: var(--text); border-color: var(--accent); }
+.pill.active { color: #fff; background: var(--accent); border-color: var(--accent); }
+
+/* ── Timetable grid ── */
+.timetable-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+}
+
+.timetable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+}
+
+.timetable thead th {
+  background: var(--bg3);
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font-disp);
+  font-weight: 600;
+  padding: 14px 12px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.timetable thead th:first-child {
+  text-align: left;
+  padding-left: 18px;
+  width: 120px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.timetable tbody tr { border-bottom: 1px solid var(--border); }
+.timetable tbody tr:last-child { border-bottom: none; }
+
+.timetable td {
+  vertical-align: top;
+  padding: 8px;
+  border-right: 1px solid var(--border);
+}
+.timetable td:last-child { border-right: none; }
+
+.timetable td.time-cell {
+  padding: 12px 12px 12px 18px;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 12px;
+  vertical-align: middle;
+  background: var(--bg3);
+  min-width: 120px;
+  font-weight: 500;
+}
+
+/* ── Session card inside cell ── */
+.sess-card {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  min-width: 110px;
+}
+.sess-card .sess-name {
+  font-family: var(--font-disp);
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 5px;
+  font-size: 13px;
+  text-transform: capitalize;
+}
+.sess-card .sess-room {
+  color: var(--muted);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.sess-card .room-dot {
+  width: 7px; height: 7px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* type colors */
+.type-c    { border-left: 3px solid var(--accent);  }
+.type-td   { border-left: 3px solid var(--accent2); }
+.type-tp   { border-left: 3px solid var(--warn);    }
+.type-ci   { border-left: 3px solid var(--purple);  }
+.type-ctp  { border-left: 3px solid var(--warn);    }
+
+.dot-c    { background: var(--accent);  }
+.dot-td   { background: var(--accent2); }
+.dot-tp   { background: var(--warn);    }
+.dot-ci   { background: var(--purple);  }
+.dot-ctp  { background: var(--warn);    }
+
+/* empty cell */
+.timetable td.day-cell { text-align: center; }
+.empty-cell { color: var(--bg3); }
+
+/* session count footer */
+.sched-footer {
+  margin-top: 16px;
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sched-footer::before {
+  content: '';
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* ── Legend ── */
+.legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend-dot  { width: 8px; height: 8px; border-radius: 2px; }
+
+/* ── Metrics cards ── */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.metric-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+}
+.metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--accent-color, var(--accent));
+}
+.metric-card .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.metric-card .value { font-family: var(--font-disp); font-size: 28px; font-weight: 700; color: var(--text); line-height: 1; }
+.metric-card .sub   { color: var(--muted); font-size: 11px; margin-top: 6px; }
+
+/* ── Optimizer ── */
+.section-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px; margin-top: 28px;
+}
+.section-head h2 {
+  font-family: var(--font-disp); font-size: 13px; font-weight: 500;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .08em;
+}
+.section-head::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.report-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+@media(max-width:600px){ .report-grid{ grid-template-columns:1fr; } }
+.report-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+.report-card .rc-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+.report-card .rc-value { font-family: var(--font-disp); font-size: 36px; font-weight: 700; line-height: 1; }
+.report-card .rc-unit  { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.composite-card { border-color: var(--accent); }
+.weights-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.weight-pill {
+  background: var(--bg3); border: 1px solid var(--border2);
+  border-radius: 99px; padding: 4px 12px;
+  font-size: 11px; color: var(--muted);
+}
+
+.energy-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.energy-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 18px 20px;
+}
+.energy-card .bld-name { font-family: var(--font-disp); font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.energy-card .bld-sub  { color: var(--muted); font-size: 11px; margin-bottom: 14px; }
+.bar-track { flex: 1; height: 6px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
+.bar-fill  { height: 100%; border-radius: 99px; transition: width .6s cubic-bezier(.4,0,.2,1); }
+.bar-ok    { background: var(--accent2); }
+.bar-warn  { background: var(--warn); }
+.bar-over  { background: var(--danger); }
+
+.daily-chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; margin-top: 8px; }
+.daily-bar-col { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+.daily-bar-inner { width: 100%; border-radius: 4px 4px 0 0; min-height: 2px; }
+.daily-bar-col .d-label { font-size: 10px; color: var(--muted); }
+.daily-bar-col .d-val   { font-size: 10px; color: var(--text); }
+
+/* ── Loader / Error ── */
+.state-box {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; min-height: 200px; gap: 12px;
+  color: var(--muted); font-size: 13px;
+}
+.spinner {
+  width: 24px; height: 24px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="app">
+
+<header>
+  <div class="logo">GL<span>.</span>Intelligent Energy-Aware Campus Resource Scheduling System</div>
+  <nav>
+    <button class="active" onclick="switchTab('schedule', this)">Emploi du temps</button>
+    <button onclick="switchTab('optimizer', this)">Optimizer</button>
+  </nav>
+  <div class="header-right">
+    <button class="btn-refresh" onclick="reloadAll()">↻ Recharger</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ══ SCHEDULE PANEL ══ -->
+  <div id="panel-schedule" class="panel active">
+
+    <!-- Group pills -->
+    <div class="group-pills" id="group-pills"></div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Cours (C)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--accent2)"></div>TD</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--warn)"></div>TP / CTP</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>CI</div>
+    </div>
+
+    <!-- Timetable -->
+    <div class="timetable-wrap">
+      <table class="timetable" id="timetable">
+        <thead>
+          <tr>
+            <th>Créneau</th>
+            <th>Lundi</th>
+            <th>Mardi</th>
+            <th>Mercredi</th>
+            <th>Jeudi</th>
+            <th>Vendredi</th>
+            <th>Samedi</th>
+          </tr>
+        </thead>
+        <tbody id="timetable-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="sched-footer" id="sched-footer"></div>
+  </div>
+
+  <!-- ══ OPTIMIZER PANEL ══ -->
+  <div id="panel-optimizer" class="panel">
+    <div id="optimizer-content">
+      <div class="state-box"><div class="spinner"></div><span>Requête Prolog en cours...</span></div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script>
+// ── Constants ────────────────────────────────────
+const API_BASE   = 'http://localhost:5000';
+const DAYS_ORDER = ['monday','tuesday','wednesday','thursday','friday','saturday'];
+const DAY_LABEL  = { monday:'Lundi', tuesday:'Mardi', wednesday:'Mercredi', thursday:'Jeudi', friday:'Vendredi', saturday:'Samedi' };
+const DAY_SHORT  = { monday:'Lun', tuesday:'Mar', wednesday:'Mer', thursday:'Jeu', friday:'Ven', saturday:'Sam' };
+
+// All possible slots in order
+const SLOT_ORDER = [
+  { key:'s1', label:'08h00 – 09h30' },
+  { key:'s2', label:'09h45 – 11h15' },
+  { key:'s3', label:'11h30 – 13h00' },
+  { key:'s4', label:'14h00 – 15h30' },
+  { key:'s5', label:'15h45 – 17h15' },
+];
+
+// ── State ────────────────────────────────────────
+let allSessions   = [];
+let activeGroup   = 'gl2_1';  // default: GL2 1
+
+// ── Helpers ──────────────────────────────────────
+async function apiFetch(path) {
+  const res = await fetch(API_BASE + path);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+function getType(course) {
+  if (/_ctp$/.test(course) || /_tdtp$/.test(course)) return 'ctp';
+  if (/_tp$/.test(course))  return 'tp';
+  if (/_td$/.test(course))  return 'td';
+  if (/_ci$/.test(course))  return 'ci';
+  return 'c';
+}
+
+function courseName(id) {
+  // "gl3_prog_log_c" → "prog log c" then strip trailing type suffix for display
+  return id
+    .replace(/^gl[234]_/, '')
+    .replace(/_ctp$|_tdtp$/, ' ctp')
+    .replace(/_/g, ' ');
+}
+
+// slot id e.g. "mon_s3" → slot key "s3"
+function slotKey(slotId) {
+  return slotId.replace(/^[a-z]+_/, '');
+}
+
+// ── Timetable render ─────────────────────────────
+function renderTimetable() {
+  const sessions = activeGroup
+    ? allSessions.filter(s => s.group === activeGroup)
+    : allSessions;
+
+  // Build lookup: day → slotKey → [sessions]
+  const grid = {};
+  for (const day of DAYS_ORDER) {
+    grid[day] = {};
+    for (const sl of SLOT_ORDER) grid[day][sl.key] = [];
+  }
+  for (const s of sessions) {
+    const sk = slotKey(s.slot);
+    if (grid[s.day] && grid[s.day][sk] !== undefined) {
+      grid[s.day][sk].push(s);
+    }
+  }
+
+  // Determine which slots have at least one session
+  const activeSlots = SLOT_ORDER.filter(sl =>
+    DAYS_ORDER.some(d => grid[d][sl.key].length > 0)
+  );
+
+  // Also check Saturday slot 1 and 2 separately (sat only has s1,s2)
+  // already covered by SLOT_ORDER
+
+  const tbody = document.getElementById('timetable-tbody');
+  let html = '';
+
+  for (const sl of activeSlots) {
+    html += `<tr>`;
+    html += `<td class="time-cell">${sl.label}</td>`;
+    for (const day of DAYS_ORDER) {
+      const cells = grid[day][sl.key];
+      html += `<td class="day-cell">`;
+      if (cells.length === 0) {
+        html += ``;
+      } else {
+        for (const s of cells) {
+          const t    = getType(s.course);
+          const name = courseName(s.course);
+          html += `
+            <div class="sess-card type-${t}">
+              <div class="sess-name">${name}</div>
+              <div class="sess-room">
+                <div class="room-dot dot-${t}"></div>
+                ${s.room}
+              </div>
+            </div>`;
+        }
+      }
+      html += `</td>`;
+    }
+    html += `</tr>`;
+  }
+
+  if (!html) {
+    html = `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:32px">Aucune session</td></tr>`;
+  }
+
+  tbody.innerHTML = html;
+
+  // Footer
+  const label = activeGroup ? `pour ${activeGroup.toUpperCase().replace('_', ' ')}` : 'au total';
+  document.getElementById('sched-footer').textContent =
+    `${sessions.length} session${sessions.length > 1 ? 's' : ''} cette semaine ${label}`;
+}
+
+// ── Load schedule ────────────────────────────────
+async function loadSchedule() {
+  try {
+    const data = await apiFetch('/schedule');
+    allSessions = data;
+
+    // Metrics
+    const groups = [...new Set(data.map(s => s.group))].sort();
+
+    // Group pills — gl2_1 active by default
+    const pillsEl = document.getElementById('group-pills');
+    pillsEl.innerHTML = groups.map(g =>
+      `<button class="pill${g === activeGroup ? ' active' : ''}" onclick="selectGroup('${g}', this)">${g.toUpperCase().replace('_',' ')}</button>`
+    ).join('');
+
+    renderTimetable();
+  } catch(e) {
+    document.getElementById('timetable-tbody').innerHTML =
+      `<tr><td colspan="7">${errorBox(e)}</td></tr>`;
+  }
+}
+
+function selectGroup(group, btn) {
+  activeGroup = group;
+  document.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderTimetable();
+}
+
+// ── Optimizer ────────────────────────────────────
+async function loadOptimizer() {
+  const el = document.getElementById('optimizer-content');
+  el.innerHTML = `<div class="state-box"><div class="spinner"></div><span>Requête Prolog en cours...</span></div>`;
+  try {
+    const d = await apiFetch('/optimize/report');
+
+    const chartBars = DAYS_ORDER.map(day => {
+      const item = d.daily.find(x => x.day === day) || { energy: 0 };
+      const maxE = Math.max(...d.daily.map(x => x.energy), 1);
+      const pct  = (item.energy / maxE * 100).toFixed(1);
+      return `<div class="daily-bar-col">
+        <div class="d-val">${item.energy.toFixed(0)}</div>
+        <div class="daily-bar-inner bar-ok" style="height:${pct}%"></div>
+        <div class="d-label">${DAY_SHORT[day]}</div>
+      </div>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="report-grid">
+        <div class="report-card composite-card">
+          <div class="rc-label">Score composite</div>
+          <div class="rc-value" style="color:var(--accent)">${d.composite.toFixed(2)}</div>
+          <div class="rc-unit">lower = better</div>
+          <div class="weights-row">
+            <span class="weight-pill">Énergie × ${d.weights.energy}</span>
+            <span class="weight-pill">Déséquilibre × ${d.weights.imbalance}</span>
+            <span class="weight-pill">Variance × ${d.weights.variance}</span>
+          </div>
+        </div>
+        <div class="report-card">
+          <div class="rc-label">Énergie totale hebdo</div>
+          <div class="rc-value" style="color:var(--accent2)">${d.energy.toFixed(1)}</div>
+          <div class="rc-unit">kWh / semaine</div>
+        </div>
+        <div class="report-card">
+          <div class="rc-label">Déséquilibre journalier</div>
+          <div class="rc-value" style="color:var(--warn)">${d.imbalance.toFixed(1)}</div>
+          <div class="rc-unit">kWh (max − min)</div>
+        </div>
+        <div class="report-card">
+          <div class="rc-label">Variance utilisation salles</div>
+          <div class="rc-value" style="color:var(--purple)">${d.variance.toFixed(2)}</div>
+          <div class="rc-unit">σ² sessions/salle</div>
+        </div>
+      </div>
+
+      <div class="section-head"><h2>Énergie par jour</h2></div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 24px;">
+        <div class="daily-chart">${chartBars}</div>
+      </div>
+
+      <div class="section-head"><h2>Bâtiments — seuil hebdomadaire</h2></div>
+      <div class="energy-section">
+        ${(d.buildings || []).map(b => {
+          const weekly = b.weekly_total;
+          const thresh = b.threshold * 6;
+          const pct = Math.min(100, (weekly / thresh * 100));
+          const cls = pct > 100 ? 'bar-over' : pct > 80 ? 'bar-warn' : 'bar-ok';
+          return `<div class="energy-card">
+            <div class="bld-name">${b.name}</div>
+            <div class="bld-sub">${weekly.toFixed(0)} / ${thresh} kWh semaine</div>
+            <div class="bar-track" style="height:8px">
+              <div class="bar-fill ${cls}" style="width:${pct.toFixed(1)}%"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    `;
+  } catch(e) {
+    el.innerHTML = errorBox(e);
+  }
+}
+
+// ── Error ─────────────────────────────────────────
+function errorBox(e) {
+  return `<div class="state-box" style="color:var(--danger)">
+    <span>Impossible de joindre l'API</span>
+    <span style="color:var(--muted);font-size:11px">${e.message}</span>
+    <span style="color:var(--muted);font-size:11px">Vérifiez que <code style="color:var(--accent)">python server.py</code> tourne</span>
+  </div>`;
+}
+
+// ── Init ──────────────────────────────────────────
+function reloadAll() {
+  loadSchedule();
+  loadOptimizer();
+}
+
+reloadAll();
+</script>
+</body>
+</html>
