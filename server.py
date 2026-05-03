@@ -8,12 +8,6 @@ CORS(app)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ── Chargement Prolog ─────────────────────────────────────────────────────────
-# On ne charge QUE optimizer.pl — il consulte déjà en cascade :
-#   optimizer.pl → scheduler.pl → constraints.pl → GL_knowledge_base.pl
-# Charger les 4 fichiers séparément dupliquait tous les faits (sessions × N),
-# ce qui faisait échouer toutes les contraintes de conflit.
-# ─────────────────────────────────────────────────────────────────────────────
 pl = Prolog()
 pl.consult(os.path.join(BASE_DIR, "optimizer.pl"))
 
@@ -34,11 +28,7 @@ def safe_atom(value: str) -> str:
     return f"'{cleaned}'"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /schedule
 # Retourne toutes les sessions de ground_truth_sessions/1
-# Chaque item : { course, group, room, slot, day, start, end }
-# ─────────────────────────────────────────────────────────────────────────────
 @app.route("/schedule")
 def get_schedule():
     sessions = []
@@ -64,10 +54,6 @@ def get_schedule():
     return jsonify(sessions)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /validate
-# Lance validate_schedule/1 et les checks individuels
-# ─────────────────────────────────────────────────────────────────────────────
 @app.route("/validate")
 def get_validate():
     checks = {}
@@ -100,10 +86,6 @@ def get_validate():
     return jsonify({"valid": overall, "checks": checks})
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /optimize/report
-# Retourne le rapport evaluate_schedule + énergie par jour + par bâtiment
-# ─────────────────────────────────────────────────────────────────────────────
 @app.route("/optimize/report")
 def get_optimize_report():
     try:
@@ -132,7 +114,7 @@ def get_optimize_report():
     except Exception as e:
         print(f"[ERROR] /optimize/report (daily energy): {e}")
 
-    # Énergie par bâtiment — sans l'appel inutile à total_weekly_energy
+    # Énergie par bâtiment
     buildings = []
     try:
         for row in pl.query(
@@ -151,7 +133,6 @@ def get_optimize_report():
     except Exception as e:
         print(f"[ERROR] /optimize/report (buildings): {e}")
 
-    # Lecture des poids directement depuis Prolog (source unique de vérité)
     weights = {}
     try:
         for row in pl.query("weight(K, V)"):
@@ -171,10 +152,6 @@ def get_optimize_report():
     })
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /energy
-# Énergie par bâtiment et par jour vs seuil
-# ─────────────────────────────────────────────────────────────────────────────
 @app.route("/energy")
 def get_energy():
     rows = []
@@ -198,10 +175,6 @@ def get_energy():
     return jsonify(rows)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /groups
-# Liste tous les groupes ET sous-groupes disponibles
-# ─────────────────────────────────────────────────────────────────────────────
 @app.route("/groups")
 def get_groups():
     groups = []
@@ -229,14 +202,10 @@ def get_groups():
     return jsonify(groups)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /group/<group_id>
 # Emploi du temps filtré pour un groupe donné
-# ─────────────────────────────────────────────────────────────────────────────
 @app.route("/group/<group_id>")
 def get_group_schedule(group_id):
     sessions = []
-    # safe_atom évite l'injection Prolog via l'URL
     safe_gid = safe_atom(group_id)
     query = (
         f"ground_truth_sessions(S),"
@@ -260,10 +229,6 @@ def get_group_schedule(group_id):
     return jsonify(sessions)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /repair/<course>/<group>
-# Tente de réparer une session pour un cours+groupe donné
-# ─────────────────────────────────────────────────────────────────────────────
 @app.route("/repair/<course>/<group>")
 def get_repair(course, group):
     safe_c = safe_atom(course)
@@ -295,10 +260,6 @@ def get_repair(course, group):
     })
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /rooms
-# Liste toutes les salles avec leur nombre de sessions
-# ─────────────────────────────────────────────────────────────────────────────
 @app.route("/rooms")
 def get_rooms():
     rooms = []
@@ -322,7 +283,6 @@ def get_rooms():
     return jsonify(rooms)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print("Starting GL Scheduler API on http://localhost:5000")
     print("Endpoints:")
@@ -334,5 +294,4 @@ if __name__ == "__main__":
     print("  GET /group/<group_id>")
     print("  GET /rooms")
     print("  GET /repair/<course>/<group>")
-    # debug=False en production — ne pas exposer le reloader Flask
     app.run(debug=False, port=5000)
