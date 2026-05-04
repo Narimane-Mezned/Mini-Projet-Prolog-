@@ -28,12 +28,11 @@ def safe_atom(value: str) -> str:
     return f"'{cleaned}'"
 
 
-# Retourne toutes les sessions de ground_truth_sessions/1
 @app.route("/schedule")
 def get_schedule():
     sessions = []
     query = (
-        "ground_truth_sessions(S),"
+        "generate_schedule(S),"
         "member(session(C,G,R,Sl), S),"
         "slot(Sl, Day, Start, End, _)"
     )
@@ -67,21 +66,20 @@ def get_validate():
             print(f"[ERROR] validation check '{name}': {e}")
             checks[name] = False
 
-    run_check("no_room_conflicts",
-              "ground_truth_sessions(S), validate_no_room_conflicts(S)")
-    run_check("no_group_conflicts",
-              "ground_truth_sessions(S), validate_no_group_conflicts(S)")
-    run_check("no_instructor_conflicts",
-              "ground_truth_sessions(S), validate_no_instructor_conflicts(S)")
-    run_check("all_equipment_ok",
-              "ground_truth_sessions(S), validate_all_equipment(S)")
-    run_check("all_capacity_ok",
-              "ground_truth_sessions(S), validate_all_capacity(S)")
-    run_check("all_instructor_availability",
-              "ground_truth_sessions(S), validate_all_instructor_availability(S)")
-    run_check("energy_ok",
-              "ground_truth_sessions(S), validate_all_energy(S)")
-
+        run_check("no_room_conflicts",
+              "generate_schedule(S), validate_no_room_conflicts(S)")
+        run_check("no_group_conflicts",
+                "generate_schedule(S), validate_no_group_conflicts(S)")
+        run_check("no_instructor_conflicts",
+                "generate_schedule(S), validate_no_instructor_conflicts(S)")
+        run_check("all_equipment_ok",
+                "generate_schedule(S), validate_all_equipment(S)")
+        run_check("all_capacity_ok",
+                "generate_schedule(S), validate_all_capacity(S)")
+        run_check("all_instructor_availability",
+                "generate_schedule(S), validate_all_instructor_availability(S)")
+        run_check("energy_ok",
+                "generate_schedule(S), validate_all_energy(S)")
     overall = all(checks.values())
     return jsonify({"valid": overall, "checks": checks})
 
@@ -90,7 +88,7 @@ def get_validate():
 def get_optimize_report():
     try:
         results = list(pl.query(
-            "ground_truth_sessions(S),"
+            "generate_schedule(S),"
             "evaluate_schedule(S, report(Energy, Imbalance, Variance, Composite))"
         ))
     except Exception as e:
@@ -106,7 +104,7 @@ def get_optimize_report():
     daily = []
     try:
         for row in pl.query(
-            "ground_truth_sessions(S),"
+            "generate_schedule(S),"
             "member(D, [monday,tuesday,wednesday,thursday,friday,saturday]),"
             "day_total_energy(S, D, E)"
         ):
@@ -118,7 +116,7 @@ def get_optimize_report():
     buildings = []
     try:
         for row in pl.query(
-            "ground_truth_sessions(S),"
+            "generate_schedule(S),"
             "building(B, Name, Threshold),"
             "findall(E, (member(D,[monday,tuesday,wednesday,thursday,friday,saturday]),"
             "building_energy_on_day(S,B,D,E)), Es),"

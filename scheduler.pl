@@ -5,7 +5,7 @@
 tasks_to_schedule(Tasks) :-
     findall(task(C, YG, Equip, Instr),
         (   course(C, _, YG, Type, _, _, Equip, Instr),
-            member(Type, [lecture, ci])
+            member(Type, [c, ci])
         ),
         LectureTasks),
     findall(task(C, G, Equip, Instr),
