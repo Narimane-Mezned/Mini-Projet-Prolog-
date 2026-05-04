@@ -84,16 +84,19 @@ best_of_list([S1, S2|Rest], Best, BestScore) :-
     best_of_list([Candidate|Rest], Best, BestScore).
 
 best_schedule(Schedule, Score) :-
-    ground_truth_sessions(Schedule),
+    generate_schedule(Schedule),
     composite_score(Schedule, Score).
 
 print_report(Schedule) :-
     evaluate_schedule(Schedule, report(Energy, Imbalance, Variance, Composite)),
     nl,
-    write('       OPTIMIZATION REPORT                '), nl,
+    
+    write('        OPTIMIZATION REPORT               '), nl,
+    
     format('  Total Weekly Energy   : ~4f kWh~n', [Energy]),
     format('  Daily Imbalance       : ~4f kWh~n', [Imbalance]),
     format('  Room Usage Variance   : ~4f~n',     [Variance]),
+    
     format('  Composite Score       : ~4f~n',     [Composite]),
     weight(energy, W1), weight(imbalance, W2), weight(variance, W3),
     format('  Weights: Energy=~w, Imbalance=~w, Variance=~w~n', [W1, W2, W3]),
@@ -128,7 +131,7 @@ print_building_energy(Schedule) :-
     ).
 
 print_room_usage(Schedule) :-
-    nl, write(' Room Usage Report '), nl,
+    nl, write(' Room Usage Report :'), nl,
     findall(R, room(R, _, _, _, _), Rooms),
     forall(
         member(R, Rooms),
@@ -155,10 +158,11 @@ compare_two(S1, Name1, S2, Name2) :-
     ).
 
 test_optimizer :-
-    nl,
+    nl, 
     write('  OPTIMIZER TEST SUITE'), nl,
     nl,
-    ground_truth_sessions(Schedule),
+    write('[STEP] Generating valid schedule...'), nl,
+    generate_schedule(Schedule),
     length(Schedule, N),
     format('[INFO] Working with ~w sessions.~n~n', [N]),
     write('[TEST 1] Total weekly energy...'), nl,
@@ -177,12 +181,14 @@ test_optimizer :-
     print_report(Schedule),
     write('[TEST 6] Room usage report...'), nl,
     print_room_usage(Schedule),
-    write('  ALL OPTIMIZER TESTS DONE'), nl,
+    nl, 
+    write('  ALL OPTIMIZER TESTS DONE'), nl.
 
 optimize :-
-    ground_truth_sessions(Schedule),
+    write(' Generating valid schedule... '), nl,
+    generate_schedule(Schedule),
     write(' Running Optimizer '), nl,
     print_report(Schedule),
     nl,
-    best_schedule(_, BestScore),
+    composite_score(Schedule, BestScore),
     format('Best composite score: ~4f~n', [BestScore]).

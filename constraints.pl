@@ -5,10 +5,23 @@ equipment_ok(Course, Room) :-
     room_equipment(Room, RoomEquip),
     compatible(Req, RoomEquip).
 
+% Capacité : supporte les year-groups (gl2, gl3, gl4) en plus des groups normaux
 capacity_ok(_Course, Room, Group) :-
     room_capacity(Room, Cap),
-    group_size(Group, Size),
+    effective_group_size(Group, Size),
     Cap >= Size.
+
+% Taille effective d'un groupe
+effective_group_size(Group, Size) :-
+    group(Group, _, Size).
+effective_group_size(Group, Size) :-
+    subgroup(Group, _, _, Size).
+effective_group_size(YearGroup, Total) :-
+    \+ group(YearGroup, _, _),
+    \+ subgroup(YearGroup, _, _, _),
+    findall(S, group(_, YearGroup, S), Sizes),
+    Sizes \= [],
+    sumlist(Sizes, Total).
 
 instructor_ok(Course, Slot) :-
     course_instructor(Course, Instr),
