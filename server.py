@@ -21,24 +21,25 @@ def safe_atom(value: str) -> str:
     """
     Sécurise une valeur pour l'injecter dans une query Prolog
     en l'entourant de quotes simples.
-    Empêche l'injection Prolog via les paramètres d'URL.
     """
-    # On rejette tout caractère qui pourrait sortir du contexte atom Prolog
     cleaned = value.replace("'", "").replace("\\", "").replace("(", "").replace(")", "")
     return f"'{cleaned}'"
 
 
-@app.route("/schedule")
-def get_schedule():
-    sessions = []
-    query = (
-        "generate_schedule(S),"
-        "member(session(C,G,R,Sl), S),"
-        "slot(Sl, Day, Start, End, _)"
-    )
+# ── Cache du planning généré au démarrage ────────────────────────────────────
+
+def build_schedule_cache():
+    """
+    Appelle generate_schedule/1 une seule fois et retourne la liste
+    de sessions sous forme de dicts Python.
+    """
+    print("[BOOT] Generating schedule via generate_schedule/1 ...")
+    raw_sessions = []
     try:
-        for row in pl.query(query):
-            sessions.append({
+        # On récupère d'abord la liste Prolog brute
+        results = list(pl.query("generate_schedule(S), member(session(C,G,R,Sl), S), slot(Sl, Day, Start, End, _)"))
+        for row in results:
+            raw_sessions.append({
                 "course": atom_str(row["C"]),
                 "group":  atom_str(row["G"]),
                 "room":   atom_str(row["R"]),
@@ -47,48 +48,68 @@ def get_schedule():
                 "start":  atom_str(row["Start"]),
                 "end":    atom_str(row["End"]),
             })
+        print(f"[BOOT] Schedule cache ready: {len(raw_sessions)} sessions.")
     except Exception as e:
-        print(f"[ERROR] /schedule : {e}")
-        return jsonify({"error": str(e)}), 500
-    return jsonify(sessions)
+        print(f"[ERROR] build_schedule_cache: {e}")
+    return raw_sessions
+
+
+def build_prolog_schedule_term():
+    """
+    Reconstruit un terme Prolog liste '[session(...), ...]' depuis le cache,
+    utilisable directement dans les queries d'évaluation/validation.
+    """
+    terms = []
+    for s in SCHEDULE_CACHE:
+        terms.append(
+            f"session({s['course']},{s['group']},{s['room']},{s['slot']})"
+        )
+    return "[" + ",".join(terms) + "]"
+
+
+# Génération au démarrage
+SCHEDULE_CACHE = build_schedule_cache()
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.route("/schedule")
+def get_schedule():
+    return jsonify(SCHEDULE_CACHE)
 
 
 @app.route("/validate")
 def get_validate():
     checks = {}
+    schedule_term = build_prolog_schedule_term()
 
-    def run_check(name, query):
+    def run_check(name, predicate):
         try:
-            result = list(pl.query(query))
+            result = list(pl.query(f"S = {schedule_term}, {predicate}(S)"))
             checks[name] = len(result) > 0
         except Exception as e:
-            # On logue l'erreur pour pouvoir déboguer côté serveur
             print(f"[ERROR] validation check '{name}': {e}")
             checks[name] = False
 
-        run_check("no_room_conflicts",
-              "generate_schedule(S), validate_no_room_conflicts(S)")
-        run_check("no_group_conflicts",
-                "generate_schedule(S), validate_no_group_conflicts(S)")
-        run_check("no_instructor_conflicts",
-                "generate_schedule(S), validate_no_instructor_conflicts(S)")
-        run_check("all_equipment_ok",
-                "generate_schedule(S), validate_all_equipment(S)")
-        run_check("all_capacity_ok",
-                "generate_schedule(S), validate_all_capacity(S)")
-        run_check("all_instructor_availability",
-                "generate_schedule(S), validate_all_instructor_availability(S)")
-        run_check("energy_ok",
-                "generate_schedule(S), validate_all_energy(S)")
+    run_check("no_room_conflicts",              "validate_no_room_conflicts")
+    run_check("no_group_conflicts",             "validate_no_group_conflicts")
+    run_check("no_instructor_conflicts",        "validate_no_instructor_conflicts")
+    run_check("all_equipment_ok",               "validate_all_equipment")
+    run_check("all_capacity_ok",                "validate_all_capacity")
+    run_check("all_instructor_availability",    "validate_all_instructor_availability")
+    run_check("energy_ok",                      "validate_all_energy")
+
     overall = all(checks.values())
     return jsonify({"valid": overall, "checks": checks})
 
 
 @app.route("/optimize/report")
 def get_optimize_report():
+    schedule_term = build_prolog_schedule_term()
+
     try:
         results = list(pl.query(
-            "generate_schedule(S),"
+            f"S = {schedule_term},"
             "evaluate_schedule(S, report(Energy, Imbalance, Variance, Composite))"
         ))
     except Exception as e:
@@ -104,7 +125,7 @@ def get_optimize_report():
     daily = []
     try:
         for row in pl.query(
-            "generate_schedule(S),"
+            f"S = {schedule_term},"
             "member(D, [monday,tuesday,wednesday,thursday,friday,saturday]),"
             "day_total_energy(S, D, E)"
         ):
@@ -116,7 +137,7 @@ def get_optimize_report():
     buildings = []
     try:
         for row in pl.query(
-            "generate_schedule(S),"
+            f"S = {schedule_term},"
             "building(B, Name, Threshold),"
             "findall(E, (member(D,[monday,tuesday,wednesday,thursday,friday,saturday]),"
             "building_energy_on_day(S,B,D,E)), Es),"
@@ -152,10 +173,11 @@ def get_optimize_report():
 
 @app.route("/energy")
 def get_energy():
+    schedule_term = build_prolog_schedule_term()
     rows = []
     try:
         for row in pl.query(
-            "ground_truth_sessions(S),"
+            f"S = {schedule_term},"
             "building(B, Name, Threshold),"
             "member(D, [monday,tuesday,wednesday,thursday,friday,saturday]),"
             "building_energy_on_day(S, B, D, E)"
@@ -177,7 +199,6 @@ def get_energy():
 def get_groups():
     groups = []
     try:
-        # Groupes principaux
         for row in pl.query("group(G, Level, Size)"):
             groups.append({
                 "id":    atom_str(row["G"]),
@@ -185,7 +206,6 @@ def get_groups():
                 "size":  int(row["Size"]),
                 "type":  "group",
             })
-        # Sous-groupes
         for row in pl.query("subgroup(SG, Parent, _, Size)"):
             groups.append({
                 "id":     atom_str(row["SG"]),
@@ -200,39 +220,19 @@ def get_groups():
     return jsonify(groups)
 
 
-# Emploi du temps filtré pour un groupe donné
 @app.route("/group/<group_id>")
 def get_group_schedule(group_id):
-    sessions = []
-    safe_gid = safe_atom(group_id)
-    query = (
-        f"ground_truth_sessions(S),"
-        f"member(session(C,{safe_gid},R,Sl), S),"
-        f"slot(Sl, Day, Start, End, _)"
-    )
-    try:
-        for row in pl.query(query):
-            sessions.append({
-                "course": atom_str(row["C"]),
-                "group":  group_id,
-                "room":   atom_str(row["R"]),
-                "slot":   atom_str(row["Sl"]),
-                "day":    atom_str(row["Day"]),
-                "start":  atom_str(row["Start"]),
-                "end":    atom_str(row["End"]),
-            })
-    except Exception as e:
-        print(f"[ERROR] /group/{group_id} : {e}")
-        return jsonify({"error": str(e)}), 400
+    sessions = [s for s in SCHEDULE_CACHE if s["group"] == group_id]
     return jsonify(sessions)
 
 
 @app.route("/repair/<course>/<group>")
 def get_repair(course, group):
+    schedule_term = build_prolog_schedule_term()
     safe_c = safe_atom(course)
     safe_g = safe_atom(group)
     query = (
-        f"ground_truth_sessions(S),"
+        f"S = {schedule_term},"
         f"repair_session({safe_c}, {safe_g}, S, Room, Slot),"
         f"slot(Slot, Day, Start, End, _)"
     )
@@ -260,10 +260,11 @@ def get_repair(course, group):
 
 @app.route("/rooms")
 def get_rooms():
+    schedule_term = build_prolog_schedule_term()
     rooms = []
     try:
         for row in pl.query(
-            "ground_truth_sessions(S),"
+            f"S = {schedule_term},"
             "room(R, Cap, Equip, Building, Cost),"
             "room_usage_count(S, R, Count)"
         ):

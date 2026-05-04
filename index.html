@@ -425,7 +425,13 @@ const SLOT_ORDER = [
 
 //State
 let allSessions   = [];
-let activeGroup   = 'gl2_1'; 
+let activeGroup   = 'gl2_1';
+
+// Retourne le year-group parent d'un sous-groupe (ex: gl4_1 → gl4)
+function parentGroup(groupId) {
+  const m = groupId.match(/^(gl\d+)_/);
+  return m ? m[1] : null;
+}
 
 
 async function apiFetch(path) {
@@ -461,9 +467,14 @@ function slotKey(slotId) {
 }
 
 function renderTimetable() {
-  const sessions = activeGroup
-    ? allSessions.filter(s => s.group === activeGroup)
-    : allSessions;
+  let sessions;
+  if (activeGroup) {
+    const parent = parentGroup(activeGroup);
+    // Sessions propres au sous-groupe + sessions du groupe parent (lectures/CI communs)
+    sessions = allSessions.filter(s => s.group === activeGroup || (parent && s.group === parent));
+  } else {
+    sessions = allSessions;
+  }
 
   const grid = {};
   for (const day of DAYS_ORDER) {
@@ -527,8 +538,10 @@ async function loadSchedule() {
     const data = await apiFetch('/schedule');
     allSessions = data;
 
-    // Metrics
-    const groups = [...new Set(data.map(s => s.group))].sort();
+    // Uniquement les sous-groupes (gl2_1, gl2_2, ...) — pas les year-groups (gl2, gl3, gl4)
+    const groups = [...new Set(data.map(s => s.group))]
+      .filter(g => /_\d+$/.test(g))  // garde seulement ceux avec _1, _2, _3 etc.
+      .sort();
 
     // Group pills — gl2_1 active by default
     const pillsEl = document.getElementById('group-pills');
